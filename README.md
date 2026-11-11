@@ -1,6 +1,6 @@
 # ROBOCON 2027 场地与底盘仿真
 
-本仓库提供 ROBOCON 2027 场地的 Gazebo Classic 仿真、天空块和地基块摆放工具，以及一个可在场地中运行的麦克纳姆底盘机器人。项目由深圳职业技术大学 Techx 战队整理；场地资源基于[南华大学衡山丌战队的 gazebo_models](https://github.com/jimi4-lei/gazebo_models)修改,优化了碰撞模型。
+本仓库提供 ROBOCON 2027 场地的 Gazebo Classic 仿真、天空块和地基块摆放工具，以及一个可在场地中运行的麦克纳姆底盘机器人。项目由深圳职业技术大学 Techx 战队修改；场地资源基于[南华大学衡山丌战队的 gazebo_models](https://github.com/jimi4-lei/gazebo_models)修改,优化了碰撞模型。
 
 ## 先看懂工程
 
