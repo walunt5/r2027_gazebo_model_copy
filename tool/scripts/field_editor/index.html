@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>RC2027 场地可视化编辑器</title>
+<style>
+:root{
+  --bg:#0e1116; --panel:#161b22; --panel2:#1c2330; --line:#2a3240;
+  --fg:#e6edf3; --dim:#8b98a8; --accent:#4f9cf9; --accent2:#f2b33d;
+  --ok:#3fb950; --warn:#d29922; --err:#f85149;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--fg);
+  font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+#app{display:grid;grid-template-columns:250px 1fr 320px;grid-template-rows:44px 1fr 24px;height:100vh}
+
+/* ---- 顶栏 ---- */
+header{grid-column:1/-1;display:flex;align-items:center;gap:10px;
+  padding:0 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+header h1{font-size:13px;font-weight:600;margin:0;letter-spacing:.3px}
+header .sp{flex:1}
+header .tag{font-size:11px;color:var(--dim);padding:2px 7px;border:1px solid var(--line);border-radius:3px}
+button{font:inherit;background:var(--panel2);color:var(--fg);border:1px solid var(--line);
+  border-radius:4px;padding:5px 11px;cursor:pointer;transition:.12s}
+button:hover:not(:disabled){border-color:var(--accent);color:#fff}
+button:disabled{opacity:.38;cursor:not-allowed}
+button.primary{background:#1f6feb;border-color:#1f6feb;color:#fff}
+button.primary:hover{background:#2a7ff5}
+button.danger:hover{border-color:var(--err);color:var(--err)}
+
+/* ---- 左栏 ---- */
+aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+.sec{padding:9px 12px;border-bottom:1px solid var(--line);font-size:11px;color:var(--dim);
+  text-transform:uppercase;letter-spacing:.6px;display:flex;align-items:center;gap:6px}
+#list{flex:1;overflow-y:auto;padding:4px 0}
+.grp{padding:7px 12px 3px;font-size:10px;color:#5f6b7a;letter-spacing:.8px}
+.row{padding:5px 12px 5px 18px;display:flex;align-items:center;gap:7px;cursor:pointer;
+  border-left:2px solid transparent;white-space:nowrap;overflow:hidden}
+.row:hover{background:#1b222d}
+.row.sel{background:#1f2b3d;border-left-color:var(--accent)}
+.row .nm{flex:1;overflow:hidden;text-overflow:ellipsis}
+.row .dot{width:6px;height:6px;border-radius:50%;flex:none}
+.row .eye{color:#5f6b7a;cursor:pointer;padding:0 2px;flex:none}
+.row .eye:hover{color:var(--fg)}
+.row.off{opacity:.42}
+.row.off .nm{text-decoration:line-through}
+.col-vis{background:#4f9cf9}.col-col{background:#3fb950}.col-mesh{background:#a371f7}
+.row .sw{width:10px;height:10px;border-radius:2px;flex:none;border:1px solid #0006}
+.grp button{margin-left:auto;padding:1px 7px;font-size:10px;line-height:1.4}
+
+/* ---- 画布 ---- */
+main{position:relative;overflow:hidden;background:#0a0d12}
+canvas{display:block;cursor:grab}
+canvas:active{cursor:grabbing}
+canvas.rectmode{cursor:crosshair}
+#hud .mode{color:var(--accent2);font-weight:600}
+#hud{position:absolute;left:12px;bottom:12px;background:#0d1117cc;border:1px solid var(--line);
+  border-radius:5px;padding:6px 10px;color:var(--dim);font-size:11px;pointer-events:none;line-height:1.7}
+#hud b{color:var(--fg);font-weight:600}
+#zoombar{position:absolute;right:12px;bottom:12px;display:flex;gap:5px}
+#zoombar button{padding:3px 9px;font-size:11px}
+
+/* ---- 右栏 ---- */
+.insp{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto}
+.insp .empty{padding:26px 16px;color:#5f6b7a;text-align:center;line-height:1.9}
+.field{display:grid;grid-template-columns:34px 1fr 46px 1fr;gap:5px;align-items:center;padding:3px 12px}
+.field label{color:var(--dim);font-size:11px;white-space:nowrap}
+.field label.r{text-align:right}
+.field.single{grid-template-columns:34px 1fr}
+.field.rgbrow{grid-template-columns:14px 1fr 14px 1fr 14px 1fr;padding-right:12px}
+.field.rgbrow label{text-align:center}
+input[type=number],input[type=text],select{width:100%;background:#0d1117;color:var(--fg);
+  border:1px solid var(--line);border-radius:3px;padding:4px 6px;font:inherit;font-size:11px}
+input:focus,select:focus{outline:none;border-color:var(--accent)}
+input[type=color]{width:100%;height:24px;padding:1px;background:#0d1117;border:1px solid var(--line);border-radius:3px}
+.hint{font-size:10px;color:#5f6b7a;padding:2px 12px 8px;line-height:1.6}
+.chk{display:flex;align-items:center;gap:6px;padding:4px 12px;font-size:11px;color:var(--dim)}
+.chk input{accent-color:var(--accent)}
+
+/* ---- 底栏 ---- */
+footer{grid-column:1/-1;background:var(--panel);border-top:1px solid var(--line);
+  display:flex;align-items:center;gap:14px;padding:0 14px;font-size:11px;color:var(--dim)}
+footer .st{display:flex;align-items:center;gap:5px}
+footer .d{width:7px;height:7px;border-radius:50%;background:#3a4452}
+footer .d.ok{background:var(--ok)}footer .d.err{background:var(--err)}footer .d.warn{background:var(--warn)}
+footer .sp{flex:1}
+
+/* ---- 模态 ---- */
+.mask{position:fixed;inset:0;background:#000000b8;display:none;align-items:center;justify-content:center;z-index:50}
+.mask.on{display:flex}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:7px;
+  width:min(860px,92vw);max-height:84vh;display:flex;flex-direction:column;box-shadow:0 20px 60px #000a}
+.modal h2{margin:0;padding:13px 18px;font-size:13px;border-bottom:1px solid var(--line);font-weight:600}
+.modal .body{padding:14px 18px;overflow:auto;flex:1}
+.modal .foot{padding:11px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+pre{background:#0a0d12;border:1px solid var(--line);border-radius:5px;padding:10px;
+  overflow:auto;font-size:11px;margin:0 0 10px;max-height:300px;line-height:1.6}
+.dl{display:grid;grid-template-columns:70px 1fr;gap:4px 12px;margin-bottom:10px}
+.dl dt{color:var(--dim)}.dl dd{margin:0}
+.tagx{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;margin-right:5px}
+.add{background:#1b4726;color:#4ac26b}.rem{background:#4a1d1d;color:#f85149}.mod{background:#3d2f10;color:#e3b341}
+.diffitem{border-left:2px solid var(--line);padding:3px 0 3px 10px;margin-bottom:6px}
+.diffitem b{color:var(--fg)}
+.diffitem span{color:var(--dim);font-size:10px}
+.warnbox{background:#3d2f10;border-left:3px solid var(--warn);padding:7px 11px;
+  border-radius:4px;margin-bottom:9px;color:#e3b341;font-size:11px}
+.errbox{background:#4a1d1d;border-left:3px solid var(--err);padding:7px 11px;
+  border-radius:4px;margin-bottom:9px;color:#ff8880;font-size:11px}
+.okbox{background:#12331d;border-left:3px solid var(--ok);padding:7px 11px;
+  border-radius:4px;margin-bottom:9px;color:#5dd47b;font-size:11px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>场地可视化编辑器</h1>
+    <span class="tag" id="modelName">robocon_ground_full</span>
+    <span class="tag" id="gitTag">git —</span>
+    <div class="sp"></div>
+    <span class="tag" id="cntTag">—</span>
+    <button id="btnFilmMode" title="拉框新建台面着色层（F）">台面着色</button>
+    <button id="btnUndo" title="Ctrl+Z">撤销</button>
+    <button id="btnRedo" title="Ctrl+Shift+Z">重做</button>
+    <button id="btnReset">还原</button>
+    <button id="btnPreview">预览改动</button>
+    <button id="btnApply" class="primary">应用到工程</button>
+  </header>
+
+  <aside>
+    <div class="sec">图层 <div class="sp" style="flex:1"></div>
+      <span style="font-size:10px">点击选中</span></div>
+    <div id="list"></div>
+  </aside>
+
+  <main>
+    <canvas id="cv"></canvas>
+    <div id="hud"></div>
+    <div id="zoombar">
+      <button id="btnFit">适配</button>
+      <button id="btnZin">＋</button>
+      <button id="btnZout">－</button>
+    </div>
+  </main>
+
+  <div class="insp" id="insp"></div>
+
+  <footer>
+    <div class="st"><span class="d" id="dSdf"></span><span>SDF</span></div>
+    <div class="st"><span class="d" id="dBuild"></span><span>构建</span></div>
+    <div class="st"><span class="d" id="dDirty"></span><span id="dirtyTxt">无改动</span></div>
+    <div class="sp"></div>
+    <div id="statusTxt" style="color:#5f6b7a">左键拖拽移动 · 拖角缩放 · 滚轮缩放 · 空格+左键平移 · F 拉框着色</div>
+  </footer>
+</div>
+
+<div class="mask" id="mask">
+  <div class="modal">
+    <h2 id="mTitle">预览</h2>
+    <div class="body" id="mBody"></div>
+    <div class="foot" id="mFoot"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ============================================================ 状态
+let S = { model:'', items:[], sdfPath:'' };
+let sel = null;            // 选中索引（items 下标）
+let view = { scale: 66, ox: 0, oy: 0 };   // 屏幕 = (世界 * scale) + (ox,oy)，y 向下
+let dirty = false;
+const hist = [];           // {items: 深拷贝}
+let hi = -1;
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+
+// ---- 台面着色层（color film）----
+// 一层只有颜色、没有碰撞的薄片, 贴在台面顶面上方。颜色存在 items[i].color (0~1 浮点),
+// 写回 SDF 时生成独立 <visual name="colorfilm_*">, 原台面网格/材质一个字节都不动。
+let filmMode = false;          // 拉框模式
+let rectDrag = null;           // {x0,y0,x1,y1} 世界坐标
+const FILM_T = 0.002;          // 默认厚度 2mm
+const FILM_Z_OFFSET = 0.0015;  // 底面与下方表面留 1.5mm, 避免与已有贴面 z-fighting
+const FILM_DEFAULT = [0.745098, 0.745098, 0.72549];   // 规则灰 RGB(190,190,185)
+const r4 = v => Math.round(v * 1e4) / 1e4;
+const rgb01ToHex = c => '#' + c.map(v =>
+  Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0')).join('');
+function hexToRgb01(h){
+  const n = parseInt(h.slice(1), 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
+// 0~1 浮点 <-> 0~255 整数
+const rgb255 = c => c.map(v => Math.round(Math.max(0, Math.min(1, v)) * 255));
+const rgb255ToHex = a => '#' + a.map(v => {
+  const n = Math.max(0, Math.min(255, Math.round(v || 0)));
+  return n.toString(16).padStart(2, '0');
+}).join('');
+function isFilm(it){ return !!it.film; }
+// 俯视命中: 取 (x,y) 正下方最高的实体顶面。box/cylinder 都算, 网格视觉跳过
+// （整片 DAE 没有包围盒信息）, 但 L1/L2 的实体碰撞体都在, 所以能准确取到 0.60 / 0.90。
+function topSurfaceAt(x, y){
+  let top = null, item = null;
+  for (const it of S.items){
+    if (it.hidden || isFilm(it)) continue;
+    const g = it.geometry;
+    if (!g || g.type === 'mesh') continue;
+    const p = it.pose;
+    const hw = g.type === 'box' ? g.size[0] / 2 : g.radius;
+    const hh = g.type === 'box' ? g.size[1] / 2 : g.radius;
+    const dx = x - p[0], dy = y - p[1];
+    const c = Math.cos(-p[5]), s = Math.sin(-p[5]);
+    const lx = dx * c - dy * s, ly = dx * s + dy * c;
+    if (Math.abs(lx) <= hw && Math.abs(ly) <= hh){
+      const t = p[2] + (g.type === 'box' ? g.size[2] / 2 : g.length / 2);
+      if (top === null || t > top){ top = t; item = it; }
+    }
+  }
+  return { top, item };
+}
+
+const DPR = window.devicePixelRatio || 1;
+function resize(){
+  const r = cv.parentElement.getBoundingClientRect();
+  cv.width = Math.round(r.width * DPR);
+  cv.height = Math.round(r.height * DPR);
+  cv.style.width = r.width + 'px';
+  cv.style.height = r.height + 'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  draw();
+}
+window.addEventListener('resize', resize);
+
+// ============================================================ 坐标
+const worldToScreen = (x,y) => [x*view.scale + view.ox, -y*view.scale + view.oy];
+const screenToWorld = (sx,sy) => [(sx - view.ox)/view.scale, -(sy - view.oy)/view.scale];
+
+// ============================================================ 绘制
+function itemColor(it){
+  if (it.color) return `rgb(${it.color.map(v=>Math.round(v*255)).join(',')})`;
+  if (it.kind === 'collision') return '#3fb950';
+  if (it.geometry.type === 'mesh') return '#a371f7';
+  return '#4f9cf9';
+}
+function isVis(it){ return it.kind === 'visual'; }
+
+function draw(){
+  const W = cv.width/DPR, H = cv.height/DPR;
+  ctx.clearRect(0,0,W,H);
+
+  // 网格（1m 细线 / 5m 粗线）
+  const [wx0,wy0] = screenToWorld(0,0);
+  const [wx1,wy1] = screenToWorld(W,H);
+  const step = view.scale > 40 ? 1 : 5;
+  ctx.lineWidth = 1;
+  for (let gx = Math.floor(wx0); gx <= Math.ceil(wx1); gx++){
+    if (gx % step) continue;
+    const [sx] = worldToScreen(gx,0);
+    ctx.strokeStyle = (gx % 5 === 0) ? '#1e2836' : '#141a23';
+    ctx.beginPath(); ctx.moveTo(sx,0); ctx.lineTo(sx,H); ctx.stroke();
+  }
+  for (let gy = Math.floor(wy0); gy <= Math.ceil(wy1); gy++){
+    if (gy % step) continue;
+    const [,sy] = worldToScreen(0,gy);
+    ctx.strokeStyle = (gy % 5 === 0) ? '#1e2836' : '#141a23';
+    ctx.beginPath(); ctx.moveTo(0,sy); ctx.lineTo(W,sy); ctx.stroke();
+  }
+  // 原点十字 + 轴标
+  const [ox,oy] = worldToScreen(0,0);
+  ctx.strokeStyle = '#2a3240'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(ox-10,oy); ctx.lineTo(ox+10,oy);
+  ctx.moveTo(ox,oy-10); ctx.lineTo(ox,oy+10); ctx.stroke();
+
+  // 场地 11x11 边界
+  const [bx0,by0] = worldToScreen(-5.5, 5.5);
+  const [bx1,by1] = worldToScreen(5.5,-5.5);
+  ctx.strokeStyle = '#2f3a4a'; ctx.setLineDash([5,4]);
+  ctx.strokeRect(bx0,by0,bx1-bx0,by1-by0); ctx.setLineDash([]);
+  // 红/蓝半场
+  const [rx,ry] = worldToScreen(-5.5,0);
+  ctx.fillStyle = '#f8514912';
+  ctx.fillRect(rx, worldToScreen(0,5.5)[1], (11*view.scale), 5.5*view.scale);
+  ctx.fillStyle = '#4f9cf912';
+  ctx.fillRect(rx, worldToScreen(0,0)[1], (11*view.scale), 5.5*view.scale);
+
+  // 先画 collision（半透明绿），再画 visual（实色描边）
+  const order = S.items.map((it,i)=>({it,i}))
+    .filter(o=>!o.it.hidden)
+    .sort((a,b)=> (isVis(a.it)?1:0) - (isVis(b.it)?1:0) || a.it.pose[2]-b.it.pose[2]);
+
+  for (const {it} of order){
+    const g = it.geometry;
+    if (g.type === 'mesh'){
+      // 网格：只画一个占位框（无法在前端解析 obj/dae）
+      const [sx,sy] = worldToScreen(it.pose[0], it.pose[1]);
+      ctx.strokeStyle = '#a371f7'; ctx.lineWidth = 1.2;
+      ctx.setLineDash([4,3]);
+      ctx.beginPath(); ctx.arc(sx,sy,16,0,7); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle='#a371f7'; ctx.font='9px monospace'; ctx.textAlign='center';
+      ctx.fillText('mesh', sx, sy+3);
+      continue;
+    }
+    const [sx,sy] = worldToScreen(it.pose[0], it.pose[1]);
+    const w = (g.type==='box' ? g.size[0] : g.radius*2) * view.scale;
+    const h = (g.type==='box' ? g.size[1] : g.radius*2) * view.scale;
+    const x = sx - w/2, y = sy - h/2;
+    const col = itemColor(it);
+    ctx.save();
+    ctx.translate(sx,sy); ctx.rotate(-it.pose[5]); ctx.translate(-sx,-sy);
+
+    if (isVis(it)){
+      if (isFilm(it)){
+        // 不透明填充 = Gazebo 里最终看到的覆盖色，保证"所见即所得"。
+        // 需要用虚线边 + 反色名称标出它的范围（否则和真实台面颜色分辨不出）。
+        const rgb = (it.color || FILM_DEFAULT).map(v => Math.round(Math.max(0, Math.min(1, v)) * 255));
+        const lum = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000;
+        const ink = lum > 140 ? '#0d1117' : '#e6edf3';
+        ctx.globalAlpha = 1; ctx.fillStyle = col; ctx.fillRect(x,y,w,h);
+        ctx.globalAlpha = .9; ctx.strokeStyle = ink; ctx.lineWidth = 1;
+        ctx.setLineDash([5,3]); ctx.strokeRect(x,y,w,h); ctx.setLineDash([]);
+        if (w > 26 && h > 14){
+          ctx.globalAlpha = .75; ctx.fillStyle = ink; ctx.font = '9px monospace';
+          ctx.textAlign = 'center'; ctx.fillText(it.name, sx, sy + 3);
+        }
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.globalAlpha = 0.5; ctx.fillStyle = col;
+        ctx.fillRect(x,y,w,h);
+        ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = 1;
+        ctx.strokeRect(x,y,w,h);
+      }
+    } else {
+      ctx.globalAlpha = 0.10; ctx.fillStyle = col; ctx.fillRect(x,y,w,h);
+      ctx.globalAlpha = 0.85; ctx.strokeStyle = col; ctx.lineWidth = 1;
+      ctx.setLineDash([3,2]); ctx.strokeRect(x,y,w,h); ctx.setLineDash([]);
+    }
+    if (g.type === 'cylinder'){
+      ctx.beginPath(); ctx.arc(sx,sy,Math.min(w,h)/2,0,7);
+      ctx.strokeStyle = col; ctx.globalAlpha = .9; ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 选中高亮 + 手柄
+  if (sel != null && S.items[sel] && !S.items[sel].hidden){
+    const it = S.items[sel], g = it.geometry;
+    if (g.type !== 'mesh'){
+      const [sx,sy] = worldToScreen(it.pose[0], it.pose[1]);
+      const w = (g.type==='box'? g.size[0] : g.radius*2)*view.scale;
+      const h = (g.type==='box'? g.size[1] : g.radius*2)*view.scale;
+      ctx.save();
+      ctx.translate(sx,sy); ctx.rotate(-it.pose[5]);
+      ctx.strokeStyle = '#f2b33d'; ctx.lineWidth = 1.6;
+      ctx.strokeRect(-w/2,-h/2,w,h);
+      if (g.type === 'box'){
+        ctx.fillStyle = '#f2b33d';
+        for (const [hx,hy] of [[-w/2,-h/2],[w/2,-h/2],[w/2,h/2],[-w/2,h/2]]){
+          ctx.fillRect(hx-3.5,hy-3.5,7,7);
+        }
+      }
+      ctx.restore();
+      // 位姿读数
+      ctx.fillStyle='#f2b33d'; ctx.font='10px monospace'; ctx.textAlign='left';
+      ctx.fillText(`x=${it.pose[0].toFixed(2)} y=${it.pose[1].toFixed(2)}`, sx+8, sy-8);
+    }
+  }
+  // 拉框预览（新建着色层）
+  if (rectDrag){
+    const x0 = Math.min(rectDrag.x0, rectDrag.x1), x1 = Math.max(rectDrag.x0, rectDrag.x1);
+    const y0 = Math.min(rectDrag.y0, rectDrag.y1), y1 = Math.max(rectDrag.y0, rectDrag.y1);
+    const [ax,ay] = worldToScreen(x0, y1);
+    const w = (x1-x0)*view.scale, h = (y1-y0)*view.scale;
+    ctx.save();
+    ctx.fillStyle = '#f2b33d26'; ctx.fillRect(ax,ay,w,h);
+    ctx.setLineDash([6,4]); ctx.strokeStyle = '#f2b33d'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(ax,ay,w,h); ctx.setLineDash([]);
+    ctx.fillStyle = '#f2b33d'; ctx.font = '10px monospace'; ctx.textAlign = 'left';
+    ctx.fillText(`${(x1-x0).toFixed(2)} × ${(y1-y0).toFixed(2)} m`, ax + 4, ay - 5);
+    ctx.restore();
+  }
+  updateHud();
+}
+
+function updateHud(){
+  const it = sel != null ? S.items[sel] : null;
+  const el = document.getElementById('hud');
+  const nFilm = S.items.filter(isFilm).length;
+  el.innerHTML = `缩放 <b>${(view.scale/66).toFixed(2)}×</b>　`
+    + `原点 <b>(${(-view.ox/view.scale).toFixed(1)}, ${(view.oy/view.scale).toFixed(1)})</b>`
+    + (it ? `<br>选中 <b>${it.name}</b> · ${it.kind}${it.film?' · 台面着色层':''}` : '')
+    + (nFilm ? `<br>着色层 <b>${nFilm}</b> 层` : '')
+    + (filmMode ? `<br><span class="mode">拉框模式：按住左键拖出台面范围</span>` : '');
+}
+
+// ============================================================ 左栏列表
+function renderList(){
+  const box = document.getElementById('list');
+  const films = S.items.map((it,i)=>({it,i})).filter(o=>isFilm(o.it));
+  const cols = S.items.map((it,i)=>({it,i})).filter(o=>o.it.kind==='collision');
+  const vis  = S.items.map((it,i)=>({it,i})).filter(o=>o.it.kind==='visual' && !isFilm(o.it));
+  let html = `<div class="grp">台面着色 FILM · ${films.length}
+    <button id="btnNewFilm" title="或在画布上按 F 后拉框">＋ 拉框新建</button></div>`;
+  for (const {it,i} of films){
+    html += `<div class="row ${sel===i?'sel':''} ${it.hidden?'off':''}" data-i="${i}">
+      <span class="sw" style="background:${itemColor(it)}"></span>
+      <span class="nm">${it.name}</span>
+      <span class="eye" data-eye="${i}">${it.hidden?'○':'●'}</span></div>`;
+  }
+  html += `<div class="grp">碰撞体 COLLISION · ${cols.length}</div>`;
+  for (const {it,i} of cols){
+    const t = it.geometry.type;
+    const dotCls = t==='mesh' ? 'col-mesh' : 'col-col';
+    html += `<div class="row ${sel===i?'sel':''} ${it.hidden?'off':''}" data-i="${i}">
+      <span class="dot ${dotCls}"></span>
+      <span class="nm">${it.name}</span>
+      <span class="eye" data-eye="${i}">${it.hidden?'○':'●'}</span></div>`;
+  }
+  html += `<div class="grp">视觉 VISUAL · ${vis.length}</div>`;
+  for (const {it,i} of vis){
+    const dotCls = it.geometry.type==='mesh' ? 'col-mesh' : 'col-vis';
+    html += `<div class="row ${sel===i?'sel':''} ${it.hidden?'off':''}" data-i="${i}">
+      <span class="dot ${dotCls}"></span>
+      <span class="nm">${it.name}</span>
+      <span class="eye" data-eye="${i}">${it.hidden?'○':'●'}</span></div>`;
+  }
+  box.innerHTML = html;
+  box.querySelectorAll('.row').forEach(r=>{
+    r.addEventListener('click', e=>{
+      if (e.target.dataset.eye !== undefined) return;
+      sel = +r.dataset.i; renderList(); renderInsp(); draw();
+    });
+  });
+  box.querySelectorAll('[data-eye]').forEach(e=>{
+    e.addEventListener('click', ev=>{
+      ev.stopPropagation();
+      const i = +e.dataset.eye;
+      pushHist();
+      S.items[i].hidden = !S.items[i].hidden;
+      dirty = true; renderList(); renderInsp(); draw(); markDirty();
+    });
+  });
+  const bn = document.getElementById('btnNewFilm');
+  if (bn) bn.onclick = ev=>{ ev.stopPropagation(); setFilmMode(!filmMode); };
+}
+
+// ============================================================ 台面着色模式
+function setFilmMode(on){
+  filmMode = on;
+  rectDrag = null;
+  cv.classList.toggle('rectmode', on);
+  document.getElementById('btnFilmMode').classList.toggle('primary', on);
+  document.getElementById('statusTxt').textContent = on
+    ? '拉框模式：在台面上按住左键拖出矩形，松手即生成着色层（Esc 退出）'
+    : '';
+  draw();
+}
+
+// ============================================================ 右栏检视器
+function renderInsp(){
+  const el = document.getElementById('insp');
+  const it = sel != null ? S.items[sel] : null;
+  if (!it){
+    el.innerHTML = `<div class="sec">属性</div>
+      <div class="empty">未选中对象<br><br>
+      左键点击画布中的方块<br>或用左侧列表选择</div>`;
+    return;
+  }
+  const g = it.geometry;
+  const isBox = g.type === 'box';
+  const isMesh = g.type === 'mesh';
+
+  let html = `<div class="sec">${it.kind === 'collision' ? '碰撞体' : (isFilm(it) ? '台面着色层' : '视觉')} · 属性</div>`;
+  html += `<div class="field single"><label>名称</label>
+    <input type="text" id="fName" value="${it.name}" ${it.static?'':'placeholder="改名后重命名"'}></div>`;
+  html += `<div class="field single"><label>类型</label>
+    <input type="text" value="${g.type}" disabled></div>`;
+
+  html += `<div class="sec" style="border-top:1px solid var(--line)">位姿 pose (m)</div>`;
+  html += `<div class="field"><label>x</label>
+    <input type="number" step="0.01" id="p0" value="${it.pose[0]}">
+    <label class="r">y</label>
+    <input type="number" step="0.01" id="p1" value="${it.pose[1]}"></div>`;
+  html += `<div class="field"><label>z</label>
+    <input type="number" step="0.01" id="p2" value="${it.pose[2]}">
+    <label class="r">yaw°</label>
+    <input type="number" step="1" id="p5" value="${(it.pose[5]*180/Math.PI).toFixed(2)}"></div>`;
+
+  if (isBox){
+    html += `<div class="sec" style="border-top:1px solid var(--line)">尺寸 size (m)</div>`;
+    html += `<div class="field"><label>宽 x</label>
+      <input type="number" step="0.01" min="0.001" id="s0" value="${g.size[0]}">
+      <label class="r">深 y</label>
+      <input type="number" step="0.01" min="0.001" id="s1" value="${g.size[1]}"></div>`;
+    html += `<div class="field single"><label>高 z</label>
+      <input type="number" step="0.01" min="0.001" id="s2" value="${g.size[2]}"></div>`;
+  } else if (g.type === 'cylinder'){
+    html += `<div class="sec" style="border-top:1px solid var(--line)">圆柱</div>`;
+    html += `<div class="field"><label>半径</label>
+      <input type="number" step="0.005" min="0.001" id="cr" value="${g.radius}">
+      <label class="r">长</label>
+      <input type="number" step="0.01" min="0.001" id="cl" value="${g.length}"></div>`;
+  } else {
+    html += `<div class="hint">网格几何（${g.uri}）不支持在此编辑尺寸，只能调整位姿。</div>`;
+  }
+
+  if (isFilm(it)){
+    const hex = rgb01ToHex(it.color || FILM_DEFAULT);
+    const rgb = rgb255(it.color || FILM_DEFAULT);
+    const zLocal = it.pose[2] - it.geometry.size[2] / 2;   // 薄膜底面高度
+    html += `<div class="sec" style="border-top:1px solid var(--line)">台面着色层 · 颜色</div>`;
+    html += `<div class="field"><label>取色</label>
+      <input type="color" id="fColor" value="${hex}">
+      <label class="r">hex</label>
+      <input type="text" id="fColorHex" value="${hex}"></div>`;
+    // RGB 三通道直接输数值（0~255），与取色器/hex 双向同步
+    html += `<div class="field rgbrow"><label>R</label>
+        <input type="number" step="1" min="0" max="255" id="fR" value="${rgb[0]}">
+      <label>G</label><input type="number" step="1" min="0" max="255" id="fG" value="${rgb[1]}">
+      <label>B</label><input type="number" step="1" min="0" max="255" id="fB" value="${rgb[2]}"></div>`;
+    html += `<div class="field single"><label>厚 m</label>
+      <input type="number" step="0.0005" min="0.0005" id="fThk" value="${it.geometry.size[2].toFixed(4)}"></div>`;
+    html += `<div style="display:flex;gap:6px;padding:5px 12px 2px">
+      <button id="btnSnapSurface">贴合下方台面</button></div>`;
+    html += `<div class="hint">底面高度 ${zLocal.toFixed(3)} m。颜色可用取色器、hex 或直接输入 R/G/B（0~255），
+      三者互相同步、边输边预览。着色层是独立 visual 薄片：
+      只有颜色、无碰撞，不改下方任何台面网格/材质。俯视时它盖住视线上方的最上一层，
+      不会顺着侧面继续往下包。颜色只写 <code>emissive</code>（自发光，ambient/diffuse 归零），
+      所以 Gazebo 里显示的 RGB 就是这里设的值，不受光照角度影响。</div>`;
+  } else if (it.kind === 'visual'){
+    // 颜色只读展示，不提供编辑入口：改错颜色会直接污染场地外观。
+    const rgb = it.color ? it.color.map(v=>Math.round(v*255)) : null;
+    html += `<div class="sec" style="border-top:1px solid var(--line)">材质（只读）</div>`;
+    html += `<div class="field single"><label>颜色</label>
+      <input type="text" value="${rgb ? rgb.join(', ') : '继承网格'}" disabled></div>`;
+  } else {
+    html += `<div class="sec" style="border-top:1px solid var(--line)">物理</div>`;
+    html += `<div class="field"><label>μ</label>
+      <input type="number" step="0.05" min="0" id="fMu" value="${it.mu ?? 0.8}">
+      <label class="r">max_vel</label>
+      <input type="number" step="0.01" id="fMv" value="${it.max_vel ?? 0.1}"></div>`;
+    html += `<div class="field single"><label>min_depth</label>
+      <input type="number" step="0.0005" id="fMd" value="${it.min_depth ?? 0.001}"></div>`;
+  }
+
+  html += `<div class="chk"><input type="checkbox" id="fHidden" ${it.hidden?'checked':''}>
+    <span>隐藏（写回时跳过该节点）</span></div>`;
+  html += `<div class="sec" style="border-top:1px solid var(--line)">操作</div>
+    <div style="display:flex;gap:6px;padding:4px 12px 12px">
+      <button id="btnDup">复制</button>
+      <button id="btnDel" class="danger">删除</button>
+    </div>`;
+  html += `<div class="hint">同名的 collision / visual 不会自动联动，改护栏时记得两边一起改。</div>`;
+  el.innerHTML = html;
+
+  const bind = (id, fn) => {
+    const e = document.getElementById(id);
+    if (!e) return;
+    e.addEventListener('change', ()=>{ pushHist(); fn(e); dirty=true; draw(); renderList(); markDirty(); });
+  };
+  bind('p0', e=> it.pose[0] = +e.value || 0);
+  bind('p1', e=> it.pose[1] = +e.value || 0);
+  bind('p2', e=> it.pose[2] = +e.value || 0);
+  bind('p5', e=> it.pose[5] = (+e.value || 0) * Math.PI/180);
+  bind('s0', e=> g.size[0] = Math.max(0.001, +e.value || 0.001));
+  bind('s1', e=> g.size[1] = Math.max(0.001, +e.value || 0.001));
+  bind('s2', e=> g.size[2] = Math.max(0.001, +e.value || 0.001));
+  bind('cr', e=> g.radius = Math.max(0.001, +e.value || 0.001));
+  bind('cl', e=> g.length = Math.max(0.001, +e.value || 0.001));
+  bind('fMu', e=> it.mu = +e.value);
+  bind('fMv', e=> it.max_vel = +e.value);
+  bind('fMd', e=> it.min_depth = +e.value);
+  bind('fHidden', e=> it.hidden = e.target.checked);
+
+  if (isFilm(it)){
+    const ci = document.getElementById('fColor');
+    const hx = document.getElementById('fColorHex');
+    const nR = document.getElementById('fR');
+    const nG = document.getElementById('fG');
+    const nB = document.getElementById('fB');
+    let pushed = false;
+    const take = () => { if (!pushed){ pushHist(); pushed = true; } };
+    const setRgb01 = c => { it.color = c; dirty = true; markDirty(); draw(); };
+    const setColor = hex => {
+      if (!/^#[0-9a-f]{6}$/i.test(hex)) return false;
+      setRgb01(hexToRgb01(hex));
+      return true;
+    };
+    // 把当前颜色同步到三个控件（skipNums=true 时不回写 RGB 输入框，避免打断用户打字）
+    const syncUI = (skipNums) => {
+      const a = rgb255(it.color || FILM_DEFAULT), h = rgb255ToHex(a);
+      ci.value = h; hx.value = h;
+      if (!skipNums){ nR.value = a[0]; nG.value = a[1]; nB.value = a[2]; }
+    };
+    // 取色器：input = 实时预览（拖色轮就跟着变）, change = 一次调整结束
+    ci.addEventListener('input', ()=>{ take(); setColor(ci.value); syncUI(false); });
+    ci.addEventListener('change', ()=>{ pushed = false; renderList(); });
+    hx.addEventListener('change', ()=>{
+      const v = hx.value.trim();
+      if (!/^#[0-9a-f]{6}$/i.test(v)){
+        syncUI(false);                 // 非法输入回滚
+        return;
+      }
+      pushHist();                      // 先存快照, 再改颜色, 撤销才能回到旧色
+      pushed = true;
+      setColor(v); syncUI(false); renderList();
+    });
+    // RGB 数值输入：逐键实时预览，空值/超界先按边界处理，失焦时再规整显示
+    const readRgb = () => [nR, nG, nB].map(e => {
+      const v = parseInt(e.value, 10);
+      return Number.isFinite(v) ? Math.max(0, Math.min(255, v)) : null;
+    });
+    const onNum = (e) => {
+      const a = readRgb();
+      if (a.some(v => v === null)) return;      // 三格都在有效范围才生效
+      take();
+      setRgb01(a.map(v => v / 255));
+      const h = rgb255ToHex(a);
+      ci.value = h; hx.value = h;
+    };
+    for (const e of [nR, nG, nB]){
+      e.addEventListener('input', onNum);
+      e.addEventListener('change', ()=>{ pushed = false; syncUI(false); renderList(); });
+    }
+    document.getElementById('fThk').addEventListener('change', e=>{
+      pushHist();
+      const v = Math.max(0.0005, +e.target.value || FILM_T);
+      it.geometry.size[2] = v; it.thickness = v;
+      dirty = true; draw(); renderInsp(); markDirty();
+    });
+    document.getElementById('btnSnapSurface').addEventListener('click', ()=>{
+      pushHist();
+      const { top } = topSurfaceAt(it.pose[0], it.pose[1]);
+      it.pose[2] = r4((top ?? 0) + it.geometry.size[2] / 2 + FILM_Z_OFFSET);
+      dirty = true; draw(); renderInsp(); renderList(); markDirty();
+    });
+  }
+
+  document.getElementById('fName').addEventListener('change', e=>{
+    const nv = e.target.value.trim();
+    if (!nv) return;
+    pushHist(); it.name = nv; dirty=true; renderList(); markDirty();
+  });
+  document.getElementById('btnDel').addEventListener('click', ()=>{
+    pushHist(); S.items.splice(sel,1); sel = null; dirty=true;
+    renderList(); renderInsp(); draw(); markDirty();
+  });
+  document.getElementById('btnDup').addEventListener('click', ()=>{
+    pushHist();
+    const c = JSON.parse(JSON.stringify(it));
+    c.name = it.name + '_copy';
+    c.pose = [...it.pose]; c.pose[0] += 0.5;
+    const base = c.name.replace(/_copy(\d+)?$/,'');
+    let n = 1, nm = `${base}_copy`;
+    while (S.items.some(x=>x.name===nm && x.kind===c.kind)) { n++; nm = `${base}_copy${n}`; }
+    c.name = nm;
+    S.items.push(c); sel = S.items.length-1; dirty=true;
+    renderList(); renderInsp(); draw(); markDirty();
+  });
+}
+
+// ============================================================ 历史
+function snapshot(){ return JSON.stringify(S.items); }
+function pushHist(){
+  const cur = snapshot();
+  if (hi >= 0 && hist[hi] === cur) return;
+  hist.length = hi+1;
+  hist.push(cur);
+  if (hist.length > 120) hist.shift();
+  hi = hist.length-1;
+  updateHistBtns();
+}
+function updateHistBtns(){
+  document.getElementById('btnUndo').disabled = hi <= 0;
+  document.getElementById('btnRedo').disabled = hi >= hist.length-1;
+}
+function undo(){
+  if (hi <= 0) return;
+  hi--; S.items = JSON.parse(hist[hi]); sel = null; dirty = true;
+  renderList(); renderInsp(); draw(); markDirty(); updateHistBtns();
+}
+function redo(){
+  if (hi >= hist.length-1) return;
+  hi++; S.items = JSON.parse(hist[hi]); sel = null; dirty = true;
+  renderList(); renderInsp(); draw(); markDirty(); updateHistBtns();
+}
+function markDirty(){
+  dirty = true;
+  document.getElementById('dDirty').className = 'd warn';
+  document.getElementById('dirtyTxt').textContent = '有未应用改动';
+}
+
+// ============================================================ 交互
+let drag = null;
+cv.addEventListener('mousedown', e=>{
+  const r = cv.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  if (e.button === 1 || e.button === 2 || spaceDown){
+    drag = {mode:'pan', sx, sy, ox:view.ox, oy:view.oy};
+    return;
+  }
+  if (e.button !== 0) return;
+
+  // 拉框模式：按下即开始画矩形, 松手生成着色层（不会拖动已有对象）
+  if (filmMode){
+    const [wx,wy] = screenToWorld(sx,sy);
+    const snap = e.shiftKey ? 0 : 0.05;
+    const q = v => snap ? Math.round(v/snap)*snap : v;
+    rectDrag = { x0:q(wx), y0:q(wy), x1:q(wx), y1:q(wy) };
+    drag = { mode:'rect' };
+    draw();
+    return;
+  }
+
+  if (sel != null && S.items[sel] && S.items[sel].geometry.type === 'box' && !S.items[sel].hidden){
+    const it = S.items[sel], g = it.geometry;
+    const [cx,cy] = worldToScreen(it.pose[0], it.pose[1]);
+    const w = g.size[0]*view.scale, h = g.size[1]*view.scale;
+    // 旋转坐标系下的角点判定
+    const ang = -it.pose[5];
+    const dx = sx-cx, dy = sy-cy;
+    const lx = dx*Math.cos(-ang) - dy*Math.sin(-ang);
+    const ly = dx*Math.sin(-ang) + dy*Math.cos(-ang);
+    const corners = [[-w/2,-h/2,'nw'],[w/2,-h/2,'ne'],[w/2,h/2,'se'],[-w/2,h/2,'sw']];
+    for (const [hx,hy,tag] of corners){
+      if (Math.hypot(lx-hx, ly-hy) < 8){
+        drag = {mode:'resize', tag, sx, sy, orig: JSON.parse(JSON.stringify(it)), startW: w/view.scale, startH: h/view.scale};
+        return;
+      }
+    }
+    if (Math.abs(lx) < w/2 && Math.abs(ly) < h/2){
+      drag = {mode:'move', sx, sy, ox:it.pose[0], oy:it.pose[1], pushed:false};
+      return;
+    }
+  }
+  // 命中测试（从上往下）
+  const [wx,wy] = screenToWorld(sx,sy);
+  let hit = null;
+  for (let i = S.items.length-1; i >= 0; i--){
+    const it = S.items[i];
+    if (it.hidden || it.geometry.type !== 'box') continue;
+    const g = it.geometry, p = it.pose;
+    const dx = wx - p[0], dy = wy - p[1];
+    const c = Math.cos(-p[5]), s = Math.sin(-p[5]);
+    const lx = dx*c - dy*s, ly = dx*s + dy*c;
+    if (Math.abs(lx) <= g.size[0]/2 && Math.abs(ly) <= g.size[1]/2){
+      if (hit === null || it.kind === 'visual') hit = i;
+      if (it.kind === 'visual') break;
+    }
+  }
+  if (hit !== null){
+    sel = hit; renderList(); renderInsp(); draw();
+    const it = S.items[hit];
+    drag = {mode:'move', sx, sy, ox:it.pose[0], oy:it.pose[1], pushed:false};
+  } else {
+    sel = null; renderList(); renderInsp(); draw();
+  }
+});
+
+let spaceDown = false;
+window.addEventListener('keydown', e=>{
+  if (e.code === 'Space'){ spaceDown = true; e.preventDefault(); }
+  const tag = (e.target.tagName||'').toLowerCase();
+  const typing = tag === 'input' || tag === 'textarea';
+  if (e.key === 'Escape' && filmMode){ setFilmMode(false); return; }
+  if (!typing && (e.key === 'f' || e.key === 'F')){ setFilmMode(!filmMode); }
+  if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase() === 'z'){ e.preventDefault(); e.shiftKey ? redo() : undo(); }
+  if (!typing && (e.key === 'Delete' || e.key === 'Backspace') && sel != null){
+    pushHist(); S.items.splice(sel,1); sel = null; dirty=true;
+    renderList(); renderInsp(); draw(); markDirty();
+  }
+  if (!typing && sel != null && e.key.startsWith('Arrow')){
+    const d = e.shiftKey ? 0.5 : 0.05;
+    pushHist();
+    if (e.key === 'ArrowLeft') S.items[sel].pose[0] -= d;
+    if (e.key === 'ArrowRight') S.items[sel].pose[0] += d;
+    if (e.key === 'ArrowUp') S.items[sel].pose[1] += d;
+    if (e.key === 'ArrowDown') S.items[sel].pose[1] -= d;
+    e.preventDefault(); dirty=true; draw(); renderInsp(); markDirty();
+  }
+});
+window.addEventListener('keyup', e=>{ if (e.code === 'Space') spaceDown = false; });
+
+window.addEventListener('mousemove', e=>{
+  const r = cv.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  if (drag && drag.mode === 'rect' && rectDrag){
+    const [wx,wy] = screenToWorld(sx,sy);
+    const snap = e.shiftKey ? 0 : 0.05;
+    const q = v => snap ? Math.round(v/snap)*snap : v;
+    rectDrag.x1 = q(wx); rectDrag.y1 = q(wy);
+    draw(); return;
+  }
+  if (!drag) return;
+  if (drag.mode === 'pan'){
+    view.ox = drag.ox + (sx - drag.sx);
+    view.oy = drag.oy + (sy - drag.sy);
+    draw(); return;
+  }
+  const it = S.items[sel];
+  if (!it) return;
+  if (!drag.pushed){ pushHist(); drag.pushed = true; }
+  const dx = (sx - drag.sx)/view.scale, dy = -(sy - drag.sy)/view.scale;
+
+  if (drag.mode === 'move'){
+    // 吸附到 0.05 m
+    const snap = e.shiftKey ? 0 : 0.05;
+    const nx = drag.ox + dx, ny = drag.oy + dy;
+    it.pose[0] = snap ? Math.round(nx/snap)*snap : nx;
+    it.pose[1] = snap ? Math.round(ny/snap)*snap : ny;
+  } else if (drag.mode === 'resize'){
+    const o = drag.orig, ang = -o.pose[5];
+    const ldx = dx*Math.cos(ang) - dy*Math.sin(ang);
+    const ldy = dx*Math.sin(ang) + dy*Math.cos(ang);
+    const sgn = {nw:[-1,-1], ne:[1,-1], se:[1,1], sw:[-1,1]}[drag.tag];
+    const snap = e.shiftKey ? 0 : 0.05;
+    let nw = Math.max(0.02, drag.startW + sgn[0]*ldx*2);
+    let nh = Math.max(0.02, drag.startH + sgn[1]*ldy*2);
+    if (snap){ nw = Math.max(0.05, Math.round(nw/snap)*snap); nh = Math.max(0.05, Math.round(nh/snap)*snap); }
+    it.geometry.size[0] = nw; it.geometry.size[1] = nh;
+    // 角点固定：中心随之平移
+    const cdx = sgn[0]*(nw - drag.startW)/2, cdy = sgn[1]*(nh - drag.startH)/2;
+    const ca = Math.cos(o.pose[5]), sa = Math.sin(o.pose[5]);
+    it.pose[0] = o.pose[0] + cdx*ca - cdy*sa;
+    it.pose[1] = o.pose[1] + cdx*sa + cdy*ca;
+  }
+  dirty = true; draw(); markDirty();
+});
+
+window.addEventListener('mouseup', ()=>{
+  if (drag && drag.mode === 'rect'){ drag = null; createFilmFromRect(); return; }
+  if (drag){ drag = null; renderInsp(); renderList(); }
+});
+
+// 由拉框结果造一层着色层：z 自动贴到矩形中心正下方最高的实体顶面 + 0.5mm
+function createFilmFromRect(){
+  const r = rectDrag; rectDrag = null;
+  if (!r){ draw(); return; }
+  const x0 = Math.min(r.x0, r.x1), x1 = Math.max(r.x0, r.x1);
+  const y0 = Math.min(r.y0, r.y1), y1 = Math.max(r.y0, r.y1);
+  if (x1 - x0 < 0.05 || y1 - y0 < 0.05){ draw(); return; }   // 太小的框当误触忽略
+  const cx = r4((x0 + x1)/2), cy = r4((y0 + y1)/2), t = FILM_T;
+  const { top } = topSurfaceAt(cx, cy);
+  let z = r4((top ?? 0) + t/2 + FILM_Z_OFFSET);
+  // 与已有着色层几乎同高时往上叠一层, 否则两层共面会 z-fighting 闪烁
+  for (let guard = 0; guard < 8; guard++){
+    const clash = S.items.some(o => isFilm(o) && Math.abs(o.pose[2] - z) < 0.0012);
+    if (!clash) break;
+    z = r4(z + t + 0.0005);
+  }
+  let n = 1;
+  while (S.items.some(x => x.name === `colorfilm_${n}`)) n++;
+  pushHist();
+  S.items.push({
+    kind:'visual', name:`colorfilm_${n}`,
+    pose:[cx, cy, z, 0, 0, 0],
+    geometry:{ type:'box', size:[r4(x1-x0), r4(y1-y0), t] },
+    static:false, hadPose:true, mu:null, max_vel:0.1, min_depth:0.001,
+    materialRaw:null, film:true, color:[...FILM_DEFAULT], thickness:t,
+  });
+  sel = S.items.length - 1;
+  setFilmMode(false);
+  renderList(); renderInsp(); draw(); markDirty();
+}
+cv.addEventListener('contextmenu', e=>e.preventDefault());
+cv.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const r = cv.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const [wx,wy] = screenToWorld(sx,sy);
+  const k = e.deltaY < 0 ? 1.12 : 1/1.12;
+  view.scale = Math.min(400, Math.max(6, view.scale*k));
+  const [nx,ny] = worldToScreen(wx,wy);
+  view.ox += sx - nx; view.oy += sy - ny;
+  draw();
+}, {passive:false});
+
+// ============================================================ 视图按钮
+function fitView(){
+  const W = cv.width/DPR, H = cv.height/DPR;
+  view.scale = Math.min(W/13.2, H/13.2);
+  view.ox = (cv.width/DPR)/2;
+  view.oy = (cv.height/DPR)/2;
+  draw();
+}
+document.getElementById('btnFit').onclick = fitView;
+document.getElementById('btnZin').onclick = ()=>{ view.scale = Math.min(400, view.scale*1.25); draw(); };
+document.getElementById('btnZout').onclick = ()=>{ view.scale = Math.max(6, view.scale/1.25); draw(); };
+
+// ============================================================ 模态框
+function openModal(title, bodyHtml, footHtml){
+  document.getElementById('mTitle').textContent = title;
+  document.getElementById('mBody').innerHTML = bodyHtml;
+  document.getElementById('mFoot').innerHTML = footHtml;
+  document.getElementById('mask').classList.add('on');
+}
+function closeModal(){ document.getElementById('mask').classList.remove('on'); }
+document.getElementById('mask').addEventListener('click', e=>{
+  if (e.target.id === 'mask') closeModal();
+});
+
+function diffHtml(d){
+  const n = d.added.length + d.removed.length + d.changed.length;
+  if (!n) return '<div class="okbox">没有任何改动。</div>';
+  let h = '';
+  if (d.added.length) h += `<div class="diffitem"><span class="tagx add">新增</span><b>${d.added.join(', ')}</b></div>`;
+  if (d.removed.length) h += `<div class="diffitem"><span class="tagx rem">删除</span><b>${d.removed.join(', ')}</b></div>`;
+  for (const c of d.changed){
+    const parts = [];
+    if (c.fields.pose){
+      const a = c.fields.pose.from.map(v=>+v.toFixed(3)).join(', ');
+      const b = c.fields.pose.to.map(v=>+v.toFixed(3)).join(', ');
+      parts.push(`pose: ${a} → ${b}`);
+    }
+    if (c.fields.geometry){
+      const fmt = g => g.type==='box' ? `box ${g.size.map(v=>+v.toFixed(3)).join('×')}`
+        : g.type==='cylinder' ? `cyl r=${g.radius} h=${g.length}` : `mesh ${g.uri}`;
+      parts.push(`geometry: ${fmt(c.fields.geometry.from)} → ${fmt(c.fields.geometry.to)}`);
+    }
+    if (c.fields.hidden) parts.push(`hidden: ${c.fields.hidden.from?'是':'否'} → ${c.fields.hidden.to?'是':'否'}`);
+    if (c.fields.color){
+      const hx = a => a ? rgb01ToHex(a.map(Number)) : '—';
+      parts.push(`color: ${hx(c.fields.color.from)} → ${hx(c.fields.color.to)}`);
+    }
+    h += `<div class="diffitem"><span class="tagx mod">修改</span><b>${c.name}</b>
+      <span>(${c.kind})</span><br><span>${parts.join('<br>')}</span></div>`;
+  }
+  return h;
+}
+
+document.getElementById('btnPreview').onclick = async ()=>{
+  const r = await fetch('/api/preview', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({items: S.items})
+  });
+  const j = await r.json();
+  let body = '';
+  if (j.errors?.length) body += j.errors.map(e=>`<div class="errbox">${e}</div>`).join('');
+  if (j.warnings?.length) body += j.warnings.map(w=>`<div class="warnbox">${w}</div>`).join('');
+  body += '<h3 style="font-size:12px;margin:4px 0 8px;color:#8b98a8">改动摘要</h3>' + diffHtml(j.diff);
+  body += '<h3 style="font-size:12px;margin:14px 0 8px;color:#8b98a8">将写入的 model.sdf</h3>'
+        + `<pre>${(j.sdf||'').replace(/[<>&]/g, c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</pre>`;
+  openModal('预览改动（未写入磁盘）', body,
+    `<button onclick="closeModal()">关闭</button>
+     <button class="primary" id="mApply">确认应用</button>`);
+  document.getElementById('mApply').onclick = ()=>{ closeModal(); doApply(); };
+};
+
+async function doApply(){
+  document.getElementById('btnApply').disabled = true;
+  document.getElementById('statusTxt').textContent = '正在写回并编译…';
+  const r = await fetch('/api/apply', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({items: S.items})
+  });
+  const j = await r.json();
+  document.getElementById('btnApply').disabled = false;
+  document.getElementById('dSdf').className = 'd ' + (j.sdfCheck ? 'ok' : 'err');
+  document.getElementById('dBuild').className = 'd ' + (j.buildOk ? 'ok' : 'err');
+  document.getElementById('statusTxt').textContent = '';
+
+  let body = '';
+  if (!j.ok){
+    body += (j.errors||[]).map(e=>`<div class="errbox">${e}</div>`).join('');
+    openModal('应用失败', body, `<button onclick="closeModal()">关闭</button>`);
+    return;
+  }
+  body += `<div class="okbox">已写入 ${S.sdfPath}<br>备份：${j.backup}</div>`;
+  body += `<div class="${j.sdfCheck?'okbox':'errbox'}">gz sdf -k：${j.sdfCheck?'通过':'失败'}<br>
+    <span style="font-size:10px">${(j.sdfCheckOutput||'').slice(0,300)}</span></div>`;
+  body += `<div class="${j.buildOk?'okbox':'errbox'}">colcon build：${j.buildOk?'成功':'失败'}</div>`;
+  if (!j.buildOk) body += `<pre>${(j.buildOutput||'').replace(/[<>&]/g,'')}</pre>`;
+  if (j.warnings?.length) body += j.warnings.map(w=>`<div class="warnbox">${w}</div>`).join('');
+  body += '<h3 style="font-size:12px;margin:12px 0 8px;color:#8b98a8">本次改动</h3>' + diffHtml(j.diff);
+  openModal('已应用到工程', body, `<button class="primary" onclick="closeModal()">完成</button>`);
+
+  dirty = false;
+  document.getElementById('dDirty').className = 'd ok';
+  document.getElementById('dirtyTxt').textContent = '已同步';
+}
+
+document.getElementById('btnUndo').onclick = undo;
+document.getElementById('btnFilmMode').onclick = ()=> setFilmMode(!filmMode);
+document.getElementById('btnRedo').onclick = redo;
+document.getElementById('btnReset').onclick = async ()=>{
+  if (dirty && !confirm('放弃当前所有未应用的改动？')) return;
+  await load();
+  sel = null; dirty = false;
+  document.getElementById('dDirty').className = 'd';
+  document.getElementById('dirtyTxt').textContent = '无改动';
+};
+document.getElementById('btnApply').onclick = ()=>{
+  const s = history.length >= 0 ? true : true;
+  doApply();
+};
+
+// ============================================================ 启动
+async function load(){
+  const r = await fetch('/api/state');
+  S = await r.json();
+  document.getElementById('modelName').textContent = S.model;
+  const c = S.items.filter(i=>i.kind==='collision').length;
+  const v = S.items.filter(i=>i.kind==='visual' && !isFilm(i)).length;
+  const f = S.items.filter(isFilm).length;
+  document.getElementById('cntTag').textContent =
+    `${c} collision / ${v} visual` + (f ? ` / ${f} 着色层` : '');
+  hist.length = 0; hi = -1; pushHist();
+  sel = null;
+  // 先确定画布尺寸, 再适配视图, 否则 scale 会按 0 尺寸算出极小值
+  resize(); renderList(); renderInsp(); fitView();
+}
+async function loadGit(){
+  try {
+    const r = await fetch('/api/git');
+    const j = await r.json();
+    document.getElementById('gitTag').textContent = j.dirty ? 'git 已改' : 'git 干净';
+    document.getElementById('gitTag').style.color = j.dirty ? '#d29922' : '';
+  } catch(e){}
+}
+load(); loadGit();
+</script>
+</body>
+</html>

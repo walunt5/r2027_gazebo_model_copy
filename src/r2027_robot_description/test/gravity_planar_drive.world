@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<sdf version="1.6">
+  <world name="gravity_planar_drive_test">
+    <physics type="ode">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+
+    <model name="falling_base">
+      <pose>0 0 1000 0 0 0</pose>
+      <link name="base_link">
+        <inertial>
+          <mass>10.0</mass>
+          <inertia>
+            <ixx>0.1557</ixx>
+            <iyy>0.1407</iyy>
+            <izz>0.2730</izz>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyz>0</iyz>
+          </inertia>
+        </inertial>
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.53 0.56 0.16</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.53 0.56 0.16</size>
+            </box>
+          </geometry>
+        </visual>
+      </link>
+
+      <plugin name="gravity_planar_drive"
+              filename="libgazebo_ros_gravity_planar_drive.so">
+        <update_rate>100</update_rate>
+        <publish_rate>50</publish_rate>
+        <cmd_vel>cmd_vel</cmd_vel>
+        <odometry>odom</odometry>
+        <odometry_frame>odom</odometry_frame>
+        <robot_base_frame>base_link</robot_base_frame>
+        <publish_odom>true</publish_odom>
+        <publish_odom_tf>true</publish_odom_tf>
+      </plugin>
+    </model>
+
+  </world>
+</sdf>

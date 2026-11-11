@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<!--
+  ROBOCON 2027 场地 (完整碰撞版)
+  与 robocon_track_ros.world 的区别: 场地模型换成 robocon_ground_full
+  - L1 实体 6×6×0.6、L2 实体 3×3×0.3
+  - 南北侧楔形坡道(网格碰撞) + 阶梯盒
+  - 平台边缘护栏、柱体基座(位置修正为 x=4.15)
+  - 12 个塔顶不属于静态场地，由 tower_top_placement_gui.py 动态生成
+  视觉网格复用工程内 robocon_ground 的 DAE
+-->
+<sdf version="1.6">
+  <world name="robocon_world">
+    <physics type="ode">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+
+    <scene>
+      <ambient>0.4 0.4 0.4 1</ambient>
+      <background>0.7 0.7 0.7 1</background>
+      <shadows>true</shadows>
+    </scene>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>0.1 0.1 -1</direction>
+    </light>
+
+    <include>
+      <uri>model://robocon_ground_full</uri>
+      <pose>0 0 0 0 0 0</pose>
+    </include>
+
+    <plugin name="gazebo_ros_init" filename="libgazebo_ros_init.so"/>
+    <plugin name="gazebo_ros_factory" filename="libgazebo_ros_factory.so"/>
+    <plugin name="gazebo_ros_state" filename="libgazebo_ros_state.so">
+      <ros>
+        <namespace>/gazebo</namespace>
+      </ros>
+      <update_rate>30.0</update_rate>
+    </plugin>
+  </world>
+</sdf>

@@ -1,0 +1,26 @@
+# ROS 2 / colcon 构建产物
+/build/
+/install/
+/log/
+
+# Python 缓存与测试产物
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 本地缓存、离线环境与工作区临时内容
+/.cache/
+/.venvs/
+/.Trash-0/
+/.workbuddy/
+/.agents/
+/.codex/
+
+# 编辑器与操作系统临时文件
+/.vscode/
+.DS_Store
+*.swp
+*.swo
+*~

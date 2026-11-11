@@ -1,0 +1,199 @@
+<?xml version="1.0"?>
+<robot name="r2027_mecanum_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- 驱动模式: true = planar_move 运动学全向(默认, 真正可横移);
+       false = 物理 ros2_control 麦轮(ODE 无辊子各向异性摩擦, 横移会漂) -->
+  <xacro:arg name="planar_drive" default="true"/>
+  <xacro:property name="planar_drive" value="$(arg planar_drive)"/>
+  <xacro:property name="wheel_mu"
+                  value="${0.05 if planar_drive == 'true' else 1.0}"/>
+
+  <!-- 底盘尺寸: 最初取自 stackforce URDF 建模器导出的 blank_robot.urdf (已归档删除),
+       数值已固化于此, 直接改这里即可 -->
+  <xacro:property name="body_length" value="0.53"/>
+  <xacro:property name="body_width" value="0.56"/>
+  <xacro:property name="body_height" value="0.16"/>
+  <xacro:property name="base_mass" value="10.0"/>
+  <xacro:property name="base_inertia_xx"
+                  value="${base_mass * (body_width * body_width + body_height * body_height) / 12.0}"/>
+  <xacro:property name="base_inertia_yy"
+                  value="${base_mass * (body_length * body_length + body_height * body_height) / 12.0}"/>
+  <xacro:property name="base_inertia_zz"
+                  value="${base_mass * (body_length * body_length + body_width * body_width) / 12.0}"/>
+
+  <xacro:property name="wheel_radius" value="0.1"/>
+  <xacro:property name="wheel_width" value="0.06"/>
+  <xacro:property name="wheel_mass" value="1.2"/>
+  <xacro:property name="wheel_x_offset" value="0.18"/>
+  <xacro:property name="wheel_y_offset" value="0.22"/>
+  <xacro:property name="wheel_z_offset" value="-0.05"/>
+  <xacro:property name="ground_clearance" value="${wheel_radius - wheel_z_offset}"/>
+
+  <!-- Cylinder axis is Y after rotating the native Z-axis cylinder. -->
+  <xacro:property name="wheel_inertia_xx_zz"
+                  value="${wheel_mass * (3.0 * wheel_radius * wheel_radius + wheel_width * wheel_width) / 12.0}"/>
+  <xacro:property name="wheel_inertia_yy"
+                  value="${0.5 * wheel_mass * wheel_radius * wheel_radius}"/>
+
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="${base_mass}"/>
+      <inertia ixx="${base_inertia_xx}" ixy="0.0" ixz="0.0"
+               iyy="${base_inertia_yy}" iyz="0.0"
+               izz="${base_inertia_zz}"/>
+    </inertial>
+    <visual name="base_link_visual">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${body_length} ${body_width} ${body_height}"/>
+      </geometry>
+      <material name="body_blue">
+        <color rgba="0.376471 0.647059 0.980392 1.0"/>
+      </material>
+    </visual>
+    <collision name="base_link_collision">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${body_length} ${body_width} ${body_height}"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- Ground-plane projection of base_link. It is a frame only, not a physics body. -->
+  <link name="footprint_base_link"/>
+  <joint name="base_link_to_footprint_base_link" type="fixed">
+    <parent link="base_link"/>
+    <child link="footprint_base_link"/>
+    <origin xyz="0 0 ${-ground_clearance}" rpy="0 0 0"/>
+  </joint>
+
+  <xacro:macro name="mecanum_wheel" params="name x_sign y_sign">
+    <link name="${name}_wheel_link">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="${wheel_mass}"/>
+        <inertia ixx="${wheel_inertia_xx_zz}" ixy="0.0" ixz="0.0"
+                 iyy="${wheel_inertia_yy}" iyz="0.0"
+                 izz="${wheel_inertia_xx_zz}"/>
+      </inertial>
+      <visual name="${name}_wheel_visual">
+        <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+        <material name="wheel_green">
+          <color rgba="0.133333 0.772549 0.368627 1.0"/>
+        </material>
+      </visual>
+      <collision name="${name}_wheel_collision">
+        <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="${name}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${name}_wheel_link"/>
+      <origin xyz="${x_sign * wheel_x_offset} ${y_sign * wheel_y_offset} ${wheel_z_offset}"
+              rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit effort="20.0" velocity="20.0"/>
+      <dynamics damping="0.05" friction="0.01"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:mecanum_wheel name="front_left" x_sign="1" y_sign="1"/>
+  <xacro:mecanum_wheel name="front_right" x_sign="1" y_sign="-1"/>
+  <xacro:mecanum_wheel name="rear_left" x_sign="-1" y_sign="1"/>
+  <xacro:mecanum_wheel name="rear_right" x_sign="-1" y_sign="-1"/>
+
+  <ros2_control name="GazeboSystem" type="system">
+    <hardware>
+      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+    </hardware>
+    <xacro:unless value="$(arg planar_drive)">
+    <joint name="front_left_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-20.0</param>
+        <param name="max">20.0</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="front_right_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-20.0</param>
+        <param name="max">20.0</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="rear_left_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-20.0</param>
+        <param name="max">20.0</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="rear_right_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-20.0</param>
+        <param name="max">20.0</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    </xacro:unless>
+  </ros2_control>
+
+  <gazebo reference="base_link">
+    <material>Gazebo/Blue</material>
+  </gazebo>
+
+  <xacro:macro name="wheel_gazebo" params="name">
+    <gazebo reference="${name}_wheel_link">
+      <material>Gazebo/Green</material>
+      <mu1>${wheel_mu}</mu1>
+      <mu2>${wheel_mu}</mu2>
+      <kp>1000000.0</kp>
+      <kd>100.0</kd>
+      <minDepth>0.001</minDepth>
+      <maxVel>0.1</maxVel>
+    </gazebo>
+  </xacro:macro>
+  <xacro:wheel_gazebo name="front_left"/>
+  <xacro:wheel_gazebo name="front_right"/>
+  <xacro:wheel_gazebo name="rear_left"/>
+  <xacro:wheel_gazebo name="rear_right"/>
+
+  <xacro:unless value="$(arg planar_drive)">
+  <gazebo>
+    <plugin filename="libgazebo_ros2_control.so" name="gazebo_ros2_control">
+      <parameters>$(find r2027_robot_description)/config/controllers.yaml</parameters>
+    </plugin>
+  </gazebo>
+  </xacro:unless>
+
+  <xacro:if value="$(arg planar_drive)">
+    <gazebo>
+      <plugin filename="$(find r2027_robot_description)/../../lib/libgazebo_ros_gravity_planar_drive.so"
+              name="planar_move">
+        <update_rate>100</update_rate>
+        <publish_rate>50</publish_rate>
+        <cmd_vel>cmd_vel</cmd_vel>
+        <odometry>odom</odometry>
+        <odometry_frame>odom</odometry_frame>
+        <robot_base_frame>base_link</robot_base_frame>
+        <publish_odom>true</publish_odom>
+        <publish_odom_tf>true</publish_odom_tf>
+        <covariance_x>0.001</covariance_x>
+        <covariance_y>0.001</covariance_y>
+        <covariance_yaw>0.01</covariance_yaw>
+      </plugin>
+    </gazebo>
+  </xacro:if>
+</robot>
